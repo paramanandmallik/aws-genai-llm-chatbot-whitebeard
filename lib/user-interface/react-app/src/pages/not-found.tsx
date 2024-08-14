@@ -34,12 +34,12 @@ export default function NotFound() {
       }
       content={
         <ContentLayout
-          header={<Header variant="h1">404. Page Not Found</Header>}
+          header={<Header variant="h1">401. Not Authorized</Header>}
         >
           <SpaceBetween size="l">
             <Container>
-              <Alert type="error" header="404. Page Not Found">
-                The page you are looking for does not exist.
+              <Alert type="error" header="401. Not Authorized">
+                You are not authorized to view this page.
               </Alert>
             </Container>
           </SpaceBetween>
@@ -48,3 +48,4 @@ export default function NotFound() {
     />
   );
 }
+

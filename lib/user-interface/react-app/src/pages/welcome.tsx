@@ -1,19 +1,78 @@
+import { useEffect, useState } from 'react';
 import {
   ContentLayout,
   Header,
   Cards,
-  Container,
   SpaceBetween,
   Link,
   BreadcrumbGroup,
-} from "@cloudscape-design/components";
-import BaseAppLayout from "../components/base-app-layout";
-import RouterButton from "../components/wrappers/router-button";
-import useOnFollow from "../common/hooks/use-on-follow";
-import { CHATBOT_NAME } from "../common/constants";
+} from '@cloudscape-design/components';
+import BaseAppLayout from '../components/base-app-layout';
+import RouterButton from '../components/wrappers/router-button';
+import useOnFollow from '../common/hooks/use-on-follow';
+import useUserDetails from '../hooks/useUserDetails';
+import { Storage } from 'aws-amplify';
+import awsExports from '../../public/aws-exports.json'; // Adjust the path if necessary
+import './welcome.css'; // Import the CSS file
+
+type ContentItem = {
+  name: string;
+  description: string;
+  href?: string;
+};
+
+const folderPath = 'content/whats-new.json'; // Ensure this path is correct
 
 export default function Welcome() {
   const onFollow = useOnFollow();
+  const { userDetails, isLoading } = useUserDetails();
+
+  const welcomeMessage = isLoading
+    ? 'Loading...'
+    : userDetails
+      ? `Welcome ${userDetails.firstName}`
+      : 'Welcome!';
+
+  const [items, setItems] = useState<ContentItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const bucketName = awsExports.Storage.AWSS3.bucket;
+        console.log('Using bucket:', bucketName);
+        console.log('Using path:', folderPath);
+
+        const result = await Storage.get(folderPath, { download: true });
+
+        if (result && result.Body instanceof ReadableStream) {
+          const reader = result.Body.getReader();
+          const decoder = new TextDecoder();
+          let text = '';
+          let done = false;
+
+          while (!done) {
+            const { value, done: doneReading } = await reader.read();
+            done = doneReading;
+            text += decoder.decode(value || new Uint8Array(), { stream: !done });
+          }
+
+          setItems(JSON.parse(text));
+        } else if (typeof result === 'string') {
+          const text = result;
+          setItems(JSON.parse(text));
+        } else {
+          console.error('Unexpected response format from S3:', result);
+        }
+      } catch (error) {
+        console.error('Error fetching data from S3:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   return (
     <BaseAppLayout
@@ -22,8 +81,8 @@ export default function Welcome() {
           onFollow={onFollow}
           items={[
             {
-              text: CHATBOT_NAME,
-              href: "/",
+              text: '',
+              href: '/',
             },
           ]}
         />
@@ -33,7 +92,11 @@ export default function Welcome() {
           header={
             <Header
               variant="h1"
-              description="An opensource, modular and comprehensive solution to deploy a multi-model and multi-RAG powered chatbot using AWS CDK on AWS."
+              description={
+                <span style={{ fontSize: '24px', color: 'navy' }}>
+                  {welcomeMessage}
+                </span>
+              }
               actions={
                 <RouterButton
                   iconAlign="right"
@@ -41,192 +104,51 @@ export default function Welcome() {
                   variant="primary"
                   href="/chatbot/playground"
                 >
-                  Getting Started
+                  Interact with Chatbot
                 </RouterButton>
               }
             >
-              Chatbot Home
+              <img
+                src="/images/whitebeardlogo.png"
+                alt=""
+                style={{ width: '5%', height: 'auto' }}
+              />
             </Header>
           }
         >
           <SpaceBetween size="l">
-            <Cards
-              cardDefinition={{
-                header: (item) => (
-                  <Link
-                    external={item.external}
-                    href={item.href}
-                    fontSize="heading-m"
-                  >
-                    {item.name}
-                  </Link>
-                ),
-                sections: [
-                  {
-                    content: (item) => (
-                      <div>
-                        <img
-                          src={item.img}
-                          alt="Placeholder"
-                          style={{ width: "100%" }}
+            {loading ? (
+              <p>Loading...</p>
+            ) : (
+              <Cards
+                cardDefinition={{
+                  header: (item: ContentItem) => (
+                    <Link
+                      external={!!item.href}
+                      href={item.href || '#'}
+                      fontSize="heading-m"
+                    >
+                      {item.name}
+                    </Link>
+                  ),
+                  sections: [
+                    {
+                      content: (item: ContentItem) => (
+                        <div
+                          className="card-content"
+                          dangerouslySetInnerHTML={{ __html: item.description }}
                         />
-                      </div>
-                    ),
-                  },
-                  {
-                    content: (item) => (
-                      <div>
-                        <div>{item.description}</div>
-                      </div>
-                    ),
-                  },
-                  {
-                    id: "type",
-                    header: "Type",
-                    content: (item) => item.type,
-                  },
-                ],
-              }}
-              cardsPerRow={[{ cards: 1 }, { minWidth: 700, cards: 3 }]}
-              items={[
-                {
-                  name: "Amazon Bedrock",
-                  external: true,
-                  type: "AWS Fully Managed",
-                  href: "https://aws.amazon.com/bedrock/",
-                  img: "/images/welcome/amazon-bedrock.png",
-                  description:
-                    "Amazon Bedrock is a fully managed service that makes foundation models (FMs) from Amazon and leading AI startups available through an API.",
-                },
-                {
-                  name: "Amazon SageMaker",
-                  external: true,
-                  type: "AWS Self hosted",
-                  href: "https://aws.amazon.com/sagemaker/",
-                  img: "/images/welcome/self-hosted.jpg",
-                  description:
-                    "CDK construct to deploy and run self hosted models on Amazon SageMaker. Deploy pre-trained models from SageMaker Foundation/Jumpstart and HuggingFace.",
-                },
-                {
-                  name: "3P Models",
-                  type: "External API",
-                  href: "#",
-                  img: "/images/welcome/3p.png",
-                  description:
-                    "Interface with 3rd party models via provided API. Such as AI21 Labs, OpenAI, HuggingFace Interface Endpoints etc.",
-                },
-              ]}
-            />
-            <Container
-              media={{
-                content: (
-                  <img src="/images/welcome/ui-dark.png" alt="placeholder" />
-                ),
-                width: 300,
-                position: "side",
-              }}
-            >
-              <Header
-                variant="h1"
-                description="CDK construct available to deploy a React based webapp"
-              >
-                Full-fledged user interface
-              </Header>
-              <p>
-                The web app is hosted on{" "}
-                <Link external href="https://aws.amazon.com/s3/">
-                  Amazon S3
-                </Link>{" "}
-                behind{" "}
-                <Link external href="https://aws.amazon.com/cloudfront/">
-                  Amazon CloudFront
-                </Link>{" "}
-                with{" "}
-                <Link external href="https://aws.amazon.com/cognito/">
-                  Cognito Authentication
-                </Link>{" "}
-                to help you interact and experiment with{" "}
-                <strong>multiple Models</strong>,{" "}
-                <strong>multiple RAG sources</strong>,{" "}
-                <strong>conversational history support</strong> and{" "}
-                <strong>documents upload</strong>.
-              </p>
-              <p>
-                The interface layer between the UI and backend is build on top
-                of{" "}
-                <Link
-                  external
-                  href="https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-websocket-api.html"
-                >
-                  Amazon API Gateway WebSocket APIs
-                </Link>
-                <br />
-                Build on top of{" "}
-                <Link external href="https://cloudscape.design/">
-                  AWS Cloudscape design system
-                </Link>
-              </p>
-            </Container>
-            <Header
-              variant="h1"
-              description="You can optionally experiment with one or more of the following CDK constructs to implement RAG requests."
-            >
-              Retrieval Augmented Generation (RAG) sources
-            </Header>
-            <Cards
-              cardDefinition={{
-                header: (item) => (
-                  <Link
-                    href={item.href}
-                    external={item.external}
-                    fontSize="heading-m"
-                  >
-                    {item.name}
-                  </Link>
-                ),
-                sections: [
-                  {
-                    content: (item) => <div>{item.description}</div>,
-                  },
-                  {
-                    id: "type",
-                    header: "Type",
-                    content: (item) => item.type,
-                  },
-                ],
-              }}
-              cardsPerRow={[{ cards: 1 }, { minWidth: 700, cards: 3 }]}
-              items={[
-                {
-                  name: "Amazon Aurora with pgvector",
-                  type: "Vector Database",
-                  external: true,
-                  href: "https://aws.amazon.com/about-aws/whats-new/2023/07/amazon-aurora-postgresql-pgvector-vector-storage-similarity-search/",
-                  description:
-                    "Amazon Aurora PostgreSQL-Compatible Edition now supports the pgvector extension to store embeddings from machine learning (ML) models in your database and to perform efficient similarity searches.",
-                  tags: ["Fully managed"],
-                },
-                {
-                  name: "Amazon Opensearch VectorSearch",
-                  type: "Vector Database",
-                  external: true,
-                  href: "https://aws.amazon.com/blogs/big-data/amazon-opensearch-services-vector-database-capabilities-explained/",
-                  description:
-                    "With OpenSearch Service’s vector database capabilities, you can implement semantic search, Retrieval Augmented Generation (RAG) with LLMs, recommendation engines, and search rich media.",
-                },
-                {
-                  name: "Amazon Kendra",
-                  external: true,
-                  type: "Search Engine",
-                  href: "https://aws.amazon.com/kendra/",
-                  description:
-                    "Amazon Kendra is an intelligent search service powered by machine learning (ML).",
-                },
-              ]}
-            />
+                      ),
+                    },
+                  ],
+                }}
+                cardsPerRow={[{ cards: 1 }, { minWidth: 700, cards: 3 }]}
+                items={items}
+              />
+            )}
           </SpaceBetween>
         </ContentLayout>
       }
-    ></BaseAppLayout>
+    />
   );
 }

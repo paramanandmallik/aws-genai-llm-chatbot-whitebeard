@@ -23,8 +23,12 @@ import RssFeed from "./pages/rag/workspace/rss-feed";
 import WorkspacePane from "./pages/rag/workspace/workspace";
 import Workspaces from "./pages/rag/workspaces/workspaces";
 import Welcome from "./pages/welcome";
+import Workshops from "./pages/chatbot/workshops/workshops"; // Import Workshops page
 import "./styles/app.scss";
 import SessionPage from "./pages/chatbot/sessions/sessions";
+import WhatsNew from "./pages/whatsnew";
+import Guides from "./pages/chatbot/guides/guides";
+// import BuildWhitebeard from "./pages/chatbot/guides/buildwhitebeard";
 
 function App() {
   const appContext = useContext(AppContext);
@@ -45,6 +49,8 @@ function App() {
               <Route path="multichat" element={<MultiChatPlayground />} />
               <Route path="models" element={<Models />} />
             </Route>
+
+            {/* All /rag routes */}
             <Route path="/rag" element={<Outlet />}>
               <Route path="" element={<Dashboard />} />
               <Route path="engines" element={<Engines />} />
@@ -63,6 +69,15 @@ function App() {
               />
               <Route path="workspaces/add-data" element={<AddData />} />
             </Route>
+
+            {/* Route for Workshops */}
+            <Route path="/workshops" element={<Workshops />} />
+            <Route path="/whats-new" element={<WhatsNew />} />
+
+            {/* Route for Guides */}
+            <Route path="/guides" element={<Guides />} />
+            {/* <Route path="/buildwhitebeard" element={<BuildWhitebeard />} /> */}
+
             <Route path="*" element={<NotFound />} />
           </Routes>
         </div>

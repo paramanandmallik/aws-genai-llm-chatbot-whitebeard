@@ -24,7 +24,7 @@ export interface PublicWebsiteProps {
 }
 
 export class PublicWebsite extends Construct {
-    readonly distribution: cf.CloudFrontWebDistribution;
+  readonly distribution: cf.CloudFrontWebDistribution;
 
   constructor(scope: Construct, id: string, props: PublicWebsiteProps) {
     super(scope, id);
@@ -65,7 +65,7 @@ export class PublicWebsite extends Construct {
         // 2. After the deployment, in your Route53 Hosted Zone, add an "A Record" that points to the Cloudfront Alias (https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/routing-to-cloudfront-distribution.html)
         ...(props.config.certificate && props.config.domain && {
           viewerCertificate: cf.ViewerCertificate.fromAcmCertificate(
-            acm.Certificate.fromCertificateArn(this,'CloudfrontAcm', props.config.certificate),
+            acm.Certificate.fromCertificateArn(this, 'CloudfrontAcm', props.config.certificate),
             {
               aliases: [props.config.domain]
             })
@@ -111,7 +111,7 @@ export class PublicWebsite extends Construct {
             },
           },
         ],
-        geoRestriction: cfGeoRestrictEnable ? cf.GeoRestriction.allowlist(...cfGeoRestrictList): undefined,
+        geoRestriction: cfGeoRestrictEnable ? cf.GeoRestriction.allowlist(...cfGeoRestrictList) : undefined,
         errorConfigurations: [
           {
             errorCode: 404,
@@ -130,6 +130,10 @@ export class PublicWebsite extends Construct {
     // ###################################################
     new cdk.CfnOutput(this, "UserInterfaceDomainName", {
       value: `https://${distribution.distributionDomainName}`,
+    });
+
+    new cdk.CfnOutput(this, "Route53DomainName", {
+      value: `https://${props.config.domain}`,
     });
 
     NagSuppressions.addResourceSuppressions(
@@ -154,6 +158,6 @@ export class PublicWebsite extends Construct {
       },
       { id: "AwsSolutions-CFR4", reason: "TLS 1.2 is the default." },
     ]);
-    }
-
   }
+
+}

@@ -52,13 +52,13 @@ export class UserInterface extends Construct {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       autoDeleteObjects: true,
-      bucketName: props.config.privateWebsite ? props.config.domain : undefined, 
+      bucketName: props.config.privateWebsite ? props.config.domain : undefined,
       websiteIndexDocument: "index.html",
       websiteErrorDocument: "index.html",
       enforceSSL: true,
       serverAccessLogsBucket: uploadLogsBucket,
     });
-    
+
     // Deploy either Private (only accessible within VPC) or Public facing website
     let apiEndpoint: string;
     let websocketEndpoint: string;
@@ -67,17 +67,18 @@ export class UserInterface extends Construct {
     let redirectSignIn: string;
 
     if (props.config.privateWebsite) {
-      const privateWebsite = new PrivateWebsite(this, "PrivateWebsite", {...props, websiteBucket: websiteBucket });
-      this.publishedDomain = props.config.domain? props.config.domain : "";
-      redirectSignIn =  `https://${this.publishedDomain}/index.html`
+      const privateWebsite = new PrivateWebsite(this, "PrivateWebsite", { ...props, websiteBucket: websiteBucket });
+      this.publishedDomain = props.config.domain ? props.config.domain : "";
+      redirectSignIn = `https://${this.publishedDomain}/index.html`
     } else {
-      const publicWebsite = new PublicWebsite(this, "PublicWebsite", {...props, websiteBucket: websiteBucket });
+      const publicWebsite = new PublicWebsite(this, "PublicWebsite", { ...props, websiteBucket: websiteBucket });
       distribution = publicWebsite.distribution
       this.publishedDomain = distribution.distributionDomainName;
-      redirectSignIn =  `https://${this.publishedDomain}`
+      redirectSignIn = `https://whitebeard.aws.dev`
+      // redirectSignIn =  `https://${this.publishedDomain}`  
     }
 
-      
+
 
     const exportsAsset = s3deploy.Source.jsonData("aws-exports.json", {
       aws_project_region: cdk.Aws.REGION,
@@ -92,14 +93,15 @@ export class UserInterface extends Construct {
         identityPoolId: props.identityPool.identityPoolId,
       },
       oauth: props.config.cognitoFederation?.enabled
-          ?  {
-              domain: `${props.config.cognitoFederation.cognitoDomain}.auth.${cdk.Aws.REGION}.amazoncognito.com`,
-              redirectSignIn: redirectSignIn,
-              redirectSignOut: `https://${this.publishedDomain}`,
-              Scopes: ["email","openid"],
-              responseType: "code",
-            }
-          : undefined,
+        ? {
+          domain: `${props.config.cognitoFederation.cognitoDomain}.auth.${cdk.Aws.REGION}.amazoncognito.com`,
+          redirectSignIn: redirectSignIn,
+          redirectSignOut: `https://whitebeard.aws.dev`,
+          // redirectSignOut: `https://${this.publishedDomain}`,
+          Scopes: ["email", "openid"],
+          responseType: "code",
+        }
+        : undefined,
       aws_appsync_graphqlEndpoint: props.api.graphqlApi.graphqlUrl,
       aws_appsync_region: cdk.Aws.REGION,
       aws_appsync_authenticationType: "AMAZON_COGNITO_USER_POOLS",
@@ -112,12 +114,12 @@ export class UserInterface extends Construct {
       },
       config: {
         auth_federated_provider: props.config.cognitoFederation?.enabled
-            ? {
-                auto_redirect: props.config.cognitoFederation?.autoRedirect,
-                custom: true,
-                name: props.config.cognitoFederation?.customProviderName,
-              }
-            : undefined,
+          ? {
+            auto_redirect: props.config.cognitoFederation?.autoRedirect,
+            custom: true,
+            name: props.config.cognitoFederation?.customProviderName,
+          }
+          : undefined,
         rag_enabled: props.config.rag.enabled,
         cross_encoders_enabled: props.crossEncodersEnabled,
         sagemaker_embeddings_enabled: props.sagemakerEmbeddingsEnabled,
@@ -227,12 +229,12 @@ export class UserInterface extends Construct {
       distribution: props.config.privateWebsite ? undefined : distribution
     });
 
-   
+
     /**
      * CDK NAG suppression
      */
     NagSuppressions.addResourceSuppressions(
-      uploadLogsBucket, 
+      uploadLogsBucket,
       [
         {
           id: "AwsSolutions-S1",
