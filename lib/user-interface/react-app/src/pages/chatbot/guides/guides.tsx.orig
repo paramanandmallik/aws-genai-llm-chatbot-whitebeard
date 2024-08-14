@@ -1,0 +1,91 @@
+import { useState } from "react";
+import BaseAppLayout from "../../../components/base-app-layout";
+import { Header, ContentLayout, SpaceBetween, BreadcrumbGroup } from "@cloudscape-design/components";
+import { Link } from 'react-router-dom'; // Import Link from react-router-dom
+
+// Define the GuideSection component
+const GuideSection = ({ id, title, description, subsections }:
+  { id: string; title: string; description: string; subsections?: { title: string; description: string; link: string; }[] }) => (
+  <section id={id} style={{ marginBottom: '2rem' }}>
+    <Header variant="h2">{title}</Header>
+    <div dangerouslySetInnerHTML={{ __html: description }} />
+    {subsections && (
+      <ul>
+        {subsections.map((subsection, index) => (
+          <li key={index}>
+            <h3>{subsection.title}</h3>
+            <p>{subsection.description}</p>
+            <a href={subsection.link} target="_blank" rel="noopener noreferrer">Read more</a>
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+);
+
+export default function Guides() {
+  const [toolsOpen, setToolsOpen] = useState(false);
+
+  return (
+    <BaseAppLayout
+      toolsOpen={toolsOpen}
+      onToolsChange={(e) => setToolsOpen(e.detail.open)}
+      breadcrumbs={
+        <BreadcrumbGroup
+          items={[
+            {
+              text: "Home",
+              href: "/",
+            },
+            {
+              text: "Guides",
+              href: "/chatbot/guides",
+            },
+          ]}
+        />
+      }
+      content={
+        <ContentLayout
+          header={<Header variant="h1">Security Guides</Header>}
+        >
+          <nav style={{ marginBottom: '2rem' }}>
+            <SpaceBetween size="l">
+              <Link to="/buildwhitebeard">Build your own whitebeard</Link>
+              <a href="#custom-solutions">Custom Solutions</a>
+            </SpaceBetween>
+          </nav>
+
+          <GuideSection
+            id="build-your-own-whitebeard"
+            title="Build your own whitebeard"
+            description={`<p>Details and resources on how to build your own whitebeard. <a href="https://quip-amazon.com/GgKYAON8vq3Q/Deploy-your-own-whitebeard" 
+            target="_blank" rel="noopener noreferrer">Read more</a></p>`}
+          />
+
+          <GuideSection
+            id="custom-solutions"
+            title="Custom Solutions"
+            description={`<p>Explore various solutions and use cases for AWS Cognito.</p>`}
+            subsections={[
+              {
+                title: "Migration: Hashicorp to AWS Secrets Manager - Part I",
+                description: "Host a self managed Hashicorp OSS vault on AWS",
+                link: "https://quip-amazon.com/sCRAAwORLHAk/Part1-HashiCorp-to-Secrets-Manager-Migration",
+              },
+              {
+                title: "Migration: Hashicorp to AWS Secrets Manager - Part II",
+                description: "Step-by-step migration guide of Secrets from Hashicorp Vault to AWS Secrets Manager.",
+                link: "https://quip-amazon.com/uBC2AEO5fsPR/Part2-HashiCorp-to-Secrets-Manager-Migration",
+              },
+              {
+                title: "Assume IRSA from EKS",
+                description: "Steps to assume IAM Roles for Service Accounts from EKS",
+                link: "https://quip-amazon.com/3TN2Ap9yogEd/Guide-Assume-IRSA-from-EKS",
+              },
+            ]}
+          />
+        </ContentLayout>
+      }
+    />
+  );
+}
