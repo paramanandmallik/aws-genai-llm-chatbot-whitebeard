@@ -16,9 +16,10 @@ def test_workspace(selenium_driver, cognito_admin_credentials, client):
 
     # cleanup
     for workspace in client.list_workspaces():
-        if (workspace.get("name") == "TEST_UI_AURORA") and workspace.get(
-            "status"
-        ) == "ready":
+        if (workspace.get("name") == "TEST_UI_AURORA") and workspace.get("status") in (
+            "ready",
+            "error",
+        ):
             client.delete_workspace(workspace.get("id"))
 
     login = LoginPage(selenium_driver)

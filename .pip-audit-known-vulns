@@ -6,6 +6,7 @@ GHSA-pjwx-r37v-7724
 PYSEC-2026-77
 PYSEC-2024-278
 PYSEC-2026-76
+GHSA-gr75-jv2w-4656
 
 # cryptography/pyopenssl - pinned by transitive deps
 PYSEC-2026-35

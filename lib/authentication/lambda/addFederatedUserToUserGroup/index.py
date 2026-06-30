@@ -70,54 +70,49 @@ def add_user_to_group(cognito, username, group_name, user_pool_id):
             raise e
 
 
+def override_token_groups(event, group_name):
+    """Override the token's cognito:groups claim so the first federated token is correct."""  # noqa: E501
+    response = event.setdefault("response", {})
+    claims_override = response.get("claimsOverrideDetails") or {}
+    claims_override["groupOverrideDetails"] = {"groupsToOverride": [group_name]}
+    response["claimsOverrideDetails"] = claims_override
+    print(f"Overriding token groups with: [{group_name}]")
+    return event
+
+
 def handler(event, context):
     print(f"Event received: {event}")
 
-    # Handle different trigger types with different event structures
-    if "request" in event and "userAttributes" in event["request"]:
-        # POST_AUTHENTICATION trigger
-        user_attributes = event["request"]["userAttributes"]
-        username = user_attributes.get("sub") or user_attributes.get("username")
-        new_group = user_attributes.get("custom:chatbot_role")
-        user_pool_id = event["userPoolId"]
-        trigger_type = "POST_AUTHENTICATION"
-    elif "userAttributes" in event:
-        # PRE_AUTHENTICATION trigger
-        user_attributes = event["userAttributes"]
-        username = user_attributes.get("sub")
-        new_group = user_attributes.get("custom:chatbot_role")
-        user_pool_id = event["userPoolId"]
-        trigger_type = "PRE_AUTHENTICATION"
-    elif (
-        "request" in event
-        and "userAttributes" in event["request"]
-        and "validationData" in event["request"]
-    ):
-        # POST_CONFIRMATION trigger
-        user_attributes = event["request"]["userAttributes"]
-        username = user_attributes.get("sub") or user_attributes.get("username")
-        new_group = user_attributes.get("custom:chatbot_role")
-        user_pool_id = event["userPoolId"]
+    # Determine the trigger type from triggerSource (event shapes overlap).
+    trigger_source = event.get("triggerSource", "")
+
+    if trigger_source.startswith("TokenGeneration_"):
+        trigger_type = "PRE_TOKEN_GENERATION"
+    elif trigger_source.startswith("PostConfirmation_"):
         trigger_type = "POST_CONFIRMATION"
-    elif (
-        "request" in event
-        and "userAttributes" in event["request"]
-        and "validationData" not in event["request"]
-    ):
-        # PRE_SIGN_UP trigger
-        user_attributes = event["request"]["userAttributes"]
-        # For Pre sign-up, username might be in different fields
-        username = (
-            user_attributes.get("sub")
-            or user_attributes.get("username")
-            or user_attributes.get("email")
-        )
-        new_group = user_attributes.get("custom:chatbot_role")
-        user_pool_id = event["userPoolId"]
+    elif trigger_source.startswith("PreSignUp_"):
         trigger_type = "PRE_SIGN_UP"
+    elif trigger_source.startswith("PostAuthentication_"):
+        trigger_type = "POST_AUTHENTICATION"
+    elif trigger_source.startswith("PreAuthentication_"):
+        trigger_type = "PRE_AUTHENTICATION"
     else:
+        print(f"Unhandled trigger source: {trigger_source}")
+        return event
+
+    user_attributes = event.get("request", {}).get("userAttributes", {})
+    if not user_attributes:
         print("No user attributes found in event")
         return event
+
+    # Cognito provides the username at the top level of the event.
+    username = (
+        event.get("userName")
+        or user_attributes.get("sub")
+        or user_attributes.get("email")
+    )
+    new_group = user_attributes.get("custom:chatbot_role")
+    user_pool_id = event["userPoolId"]
 
     print(f"Trigger type: {trigger_type}")
     print(f"User attributes: {user_attributes}")
@@ -133,29 +128,22 @@ def handler(event, context):
         new_group = default_group
         print(f"No custom:chatbot_role found, using default group: {default_group}")
 
-    # For Pre sign-up, we cannot assign groups because the user doesn't exist yet
+    # PRE_SIGN_UP fires before the federated user exists, so we cannot assign
+    # groups here. The actual assignment happens on PRE_TOKEN_GENERATION, which
+    # runs after the user is created and on every subsequent sign-in.
     if trigger_type == "PRE_SIGN_UP":
-        print("Pre sign-up trigger - user will be created after this trigger completes")
-        print(f"Will assign user to group: {new_group}")
-        print(
-            "Note: Group assignment will happen in a separate \
-            trigger (POST_CONFIRMATION)"
-        )
+        print("Pre sign-up trigger - user does not exist yet; deferring assignment")
+        print(f"Resolved group for later assignment: {new_group}")
 
-        # For Pre sign-up, we can only validate or modify the sign-up request
-        # We cannot assign groups yet as the user doesn't exist
-        # The group assignment will need to happen in
-        # POST_CONFIRMATION or PRE_AUTHENTICATION
-
-        # You might want to add the group information to the user attributes
-        # so it can be used later in POST_CONFIRMATION
+        # Persist the resolved group on the attribute so it is available later.
         if "custom:chatbot_role" not in user_attributes:
             user_attributes["custom:chatbot_role"] = new_group
             print(f"Added custom:chatbot_role attribute: {new_group}")
 
         return event
 
-    # For other triggers (PRE_AUTHENTICATION, POST_AUTHENTICATION, POST_CONFIRMATION)
+    # For triggers where the user already exists
+    # (POST_CONFIRMATION, POST_AUTHENTICATION, PRE_TOKEN_GENERATION).
     if username:
         cognito = boto3.client("cognito-idp")
 
@@ -180,6 +168,10 @@ def handler(event, context):
             )
         else:
             print(f"User {username} is already in group {new_group}")
+
+        # For Pre Token Generation, override the groups claim so the first token is correct.  # noqa: E501
+        if trigger_type == "PRE_TOKEN_GENERATION":
+            event = override_token_groups(event, new_group)
     else:
         print("No username found in user attributes, skipping group assignment")
 

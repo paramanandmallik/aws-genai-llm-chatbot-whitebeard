@@ -52,14 +52,14 @@ export class Authentication extends Construct {
       getConstructId("WorkspaceManagerGroup", config),
       {
         userPoolId: userPool.userPoolId,
-        groupName: getConstructId("workspace_manager", config),
+        groupName: "workspace_manager",
         description: "Workspace managers group",
       }
     );
 
     new cognito.CfnUserPoolGroup(this, "UserGroup", {
       userPoolId: userPool.userPoolId,
-      groupName: getConstructId("user", config),
+      groupName: "user",
       description: "User group",
     });
 
@@ -314,7 +314,7 @@ export class Authentication extends Construct {
           logRetention: config.logRetention ?? logs.RetentionDays.ONE_WEEK,
           loggingFormat: lambda.LoggingFormat.JSON,
           environment: {
-            DEFAULT_USER_GROUP: getConstructId("user", config),
+            DEFAULT_USER_GROUP: "user",
           },
         }
       );
@@ -341,6 +341,19 @@ export class Authentication extends Construct {
       );
       userPool.addTrigger(
         cognito.UserPoolOperation.POST_CONFIRMATION,
+        addFederatedUserToUserGroupLambda
+      );
+
+      // POST_CONFIRMATION does not fire for federated users; PRE_TOKEN_GENERATION fires on every sign-in, so use it to assign the group.
+      addFederatedUserToUserGroupLambda.addPermission(
+        "CognitoPreTokenGenerationTrigger",
+        {
+          principal: new iam.ServicePrincipal("cognito-idp.amazonaws.com"),
+          sourceArn: userPool.userPoolArn,
+        }
+      );
+      userPool.addTrigger(
+        cognito.UserPoolOperation.PRE_TOKEN_GENERATION,
         addFederatedUserToUserGroupLambda
       );
 

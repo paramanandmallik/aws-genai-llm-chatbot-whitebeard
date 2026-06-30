@@ -24,6 +24,8 @@ from index import (  # noqa: E402
 @pytest.fixture
 def cognito_event():
     return {
+        "triggerSource": "TokenGeneration_HostedAuth",
+        "userName": "EntraID_test-user-123",
         "request": {
             "userAttributes": {
                 "sub": "test-user-123",
@@ -93,6 +95,8 @@ def test_remove_user_from_group_success(mock_cognito):
 
 def test_handler_new_group_assignment(mock_cognito):
     event = {
+        "triggerSource": "PostAuthentication_Authentication",
+        "userName": "test-user-123",
         "request": {
             "userAttributes": {
                 "sub": "test-user-123",
@@ -115,6 +119,8 @@ def test_handler_new_group_assignment(mock_cognito):
 
 def test_handler_no_group_change(mock_cognito):
     event = {
+        "triggerSource": "PostAuthentication_Authentication",
+        "userName": "test-user-123",
         "request": {
             "userAttributes": {
                 "sub": "test-user-123",
@@ -137,6 +143,8 @@ def test_handler_no_group_change(mock_cognito):
 
 def test_handler_no_chatbot_role(mock_cognito):
     event = {
+        "triggerSource": "PostAuthentication_Authentication",
+        "userName": "test-user-123",
         "request": {"userAttributes": {"sub": "test-user-123"}},
         "userPoolId": "us-east-1_testpool",
     }
@@ -157,3 +165,119 @@ def test_handler_no_chatbot_role(mock_cognito):
         Username="test-user-123",
         GroupName="user",  # default group
     )
+
+
+def test_handler_pre_sign_up_does_not_assign(mock_cognito):
+    # PRE_SIGN_UP fires for federated users but cannot assign groups yet,
+    # so it must return early without calling the admin APIs.
+    event = {
+        "triggerSource": "PreSignUp_ExternalProvider",
+        "userName": "EntraID_test-user-123",
+        "request": {
+            "userAttributes": {
+                "email": "user@example.com",
+                "custom:chatbot_role": "workspace_manager",
+            }
+        },
+        "userPoolId": "us-east-1_testpool",
+    }
+
+    result = handler(event, None)
+
+    assert result == event
+    mock_cognito.admin_add_user_to_group.assert_not_called()
+    mock_cognito.admin_remove_user_from_group.assert_not_called()
+
+
+def test_handler_unknown_trigger_source_returns_early(mock_cognito):
+    event = {
+        "request": {
+            "userAttributes": {
+                "sub": "test-user-123",
+                "custom:chatbot_role": "workspace_manager",
+            }
+        },
+        "userPoolId": "us-east-1_testpool",
+    }
+
+    result = handler(event, None)
+
+    assert result == event
+    mock_cognito.admin_list_groups_for_user.assert_not_called()
+    mock_cognito.admin_add_user_to_group.assert_not_called()
+
+
+def test_handler_uses_username_over_sub(mock_cognito):
+    # Cognito delivers the username at the top level as "userName"; it must
+    # take precedence over sub when calling the admin APIs.
+    event = {
+        "triggerSource": "PostAuthentication_Authentication",
+        "userName": "EntraID_top-level-name",
+        "request": {
+            "userAttributes": {
+                "sub": "test-user-123",
+                "custom:chatbot_role": "workspace_manager",
+            }
+        },
+        "userPoolId": "us-east-1_testpool",
+    }
+
+    mock_cognito.admin_list_groups_for_user.return_value = {"Groups": []}
+
+    handler(event, None)
+
+    mock_cognito.admin_add_user_to_group.assert_called_once_with(
+        UserPoolId="us-east-1_testpool",
+        Username="EntraID_top-level-name",
+        GroupName="workspace_manager",
+    )
+
+
+def test_handler_pre_token_generation_overrides_claim(mock_cognito):
+    # PRE_TOKEN_GENERATION persists membership AND overrides the token's
+    # groups claim so the first federated token is correct.
+    event = {
+        "triggerSource": "TokenGeneration_HostedAuth",
+        "userName": "EntraID_test-user-123",
+        "request": {
+            "userAttributes": {
+                "sub": "test-user-123",
+                "custom:chatbot_role": "workspace_manager",
+            }
+        },
+        "userPoolId": "us-east-1_testpool",
+    }
+
+    mock_cognito.admin_list_groups_for_user.return_value = {"Groups": []}
+
+    result = handler(event, None)
+
+    mock_cognito.admin_add_user_to_group.assert_called_once_with(
+        UserPoolId="us-east-1_testpool",
+        Username="EntraID_test-user-123",
+        GroupName="workspace_manager",
+    )
+    assert result["response"]["claimsOverrideDetails"]["groupOverrideDetails"][
+        "groupsToOverride"
+    ] == ["workspace_manager"]
+
+
+def test_handler_non_token_trigger_does_not_override_claim(mock_cognito):
+    # Only PRE_TOKEN_GENERATION should set claimsOverrideDetails.
+    event = {
+        "triggerSource": "PostAuthentication_Authentication",
+        "userName": "test-user-123",
+        "request": {
+            "userAttributes": {
+                "sub": "test-user-123",
+                "custom:chatbot_role": "workspace_manager",
+            }
+        },
+        "userPoolId": "us-east-1_testpool",
+    }
+
+    mock_cognito.admin_list_groups_for_user.return_value = {"Groups": []}
+
+    result = handler(event, None)
+
+    assert "response" not in result
